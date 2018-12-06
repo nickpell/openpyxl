@@ -1,3 +1,45 @@
+2.6-a1 (2018-11-21)
+===================
+
+
+Major changes
+-------------
+
+* Implement robust for merged cells so that these can be formatted the way
+  Excel does without confusion. Thanks to Magnus Schieder.
+
+
+Minor changes
+-------------
+
+* Add support for worksheet scenarios
+* Add read support for chartsheets
+* Add method for moving ranges of cells on a worksheet
+* Last version to support Python 2.7
+
+
+Deprecations
+------------
+
+* Type inference and coercion for cell values
+
+
+2.5.13 (unreleased)
+===================
+
+
+Bugfixes
+--------
+
+* `#1142 <https://bitbucket.org/openpyxl/openpyxl/issues/1142>`_ Exception raised for unsuppoted image files
+
+
+Pull Requests
+-------------
+
+* `PR301 <https://bitbucket.org/openpyxl/openpyxl/pull-requests/301/>`_ Add support for nested brackets to the tokeniser
+
+
 2.5.12 (2018-11-29)
 ===================
 

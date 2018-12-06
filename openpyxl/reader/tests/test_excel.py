@@ -6,6 +6,7 @@ from tempfile import NamedTemporaryFile
 from zipfile import BadZipfile, ZipFile
 
 from openpyxl.packaging.manifest import Manifest, Override
+from openpyxl.packaging.relationship import Relationship
 from openpyxl.utils.exceptions import InvalidFileException
 from openpyxl.xml.functions import fromstring
 from openpyxl.xml.constants import (
@@ -39,21 +40,6 @@ def test_load_workbook_from_fileobj(datadir, load_workbook):
     datadir.chdir()
     with open('empty_with_no_properties.xlsx', 'rb') as f:
         load_workbook(f)
-
-
-def test_repair_central_directory():
-    from ..excel import repair_central_directory, CENTRAL_DIRECTORY_SIGNATURE
-
-    data_a = b"foobarbaz" + CENTRAL_DIRECTORY_SIGNATURE
-    data_b = b"bazbarfoo1234567890123456890"
-
-    # The repair_central_directory looks for a magic set of bytes
-    # (CENTRAL_DIRECTORY_SIGNATURE) and strips off everything 18 bytes past the sequence
-    f = repair_central_directory(BytesIO(data_a + data_b), True)
-    assert f.read() == data_a + data_b[:18]
-
-    f = repair_central_directory(BytesIO(data_b), True)
-    assert f.read() == data_b
 
 
 @pytest.mark.parametrize('wb_type, wb_name', [
@@ -112,7 +98,9 @@ def test_style_assignment(datadir, load_workbook):
     assert len(wb._alignments) == 9
     assert len(wb._fills) == 6
     assert len(wb._fonts) == 8
-    assert len(wb._borders) == 7
+    # 7 + 4 borders, because the top-left cell of a merg cell gets
+    # a new border and the old ones are not deleted.
+    assert len(wb._borders) == 11
     assert len(wb._number_formats) == 0
     assert len(wb._protections) == 1
 
@@ -161,4 +149,77 @@ def test_no_external_links(datadir, load_workbook):
     datadir.chdir()
 
     wb = load_workbook("bug137.xlsx", keep_links=False)
-    assert wb.keep_links is False
+    assert wb._external_links == []
+
+
+from ..excel import ExcelReader
+
+
+class TestExcelReader:
+
+    def test_ctor(self, datadir):
+        datadir.chdir()
+        reader = ExcelReader("complex-styles.xlsx")
+        assert reader.valid_files == [
+            '[Content_Types].xml',
+            '_rels/.rels',
+            'xl/_rels/workbook.xml.rels',
+            'xl/workbook.xml',
+            'xl/sharedStrings.xml',
+            'xl/theme/theme1.xml',
+            'xl/styles.xml',
+            'xl/worksheets/sheet1.xml',
+            'docProps/thumbnail.jpeg',
+            'docProps/core.xml',
+            'docProps/app.xml'
+        ]
+
+
+    def test_read_manifest(self, datadir):
+        datadir.chdir()
+        reader = ExcelReader("complex-styles.xlsx")
+        reader.read_manifest()
+        assert reader.package is not None
+
+
+    def test_read_strings(self, datadir):
+        datadir.chdir()
+        reader = ExcelReader("complex-styles.xlsx")
+        reader.read_manifest()
+        reader.read_strings()
+        assert reader.shared_strings != []
+
+
+    def test_read_workbook(self, datadir):
+        datadir.chdir()
+        reader = ExcelReader("complex-styles.xlsx")
+        reader.read_manifest()
+        reader.read_workbook()
+        assert reader.wb is not None
+
+
+    def test_read_workbook(self, datadir):
+        datadir.chdir()
+        reader = ExcelReader("complex-styles.xlsx")
+        reader.read_manifest()
+        reader.read_workbook()
+        reader.read_theme()
+        assert reader.wb.loaded_theme is not None
+
+
+    def test_read_chartsheet(self, datadir):
+        datadir.chdir()
+        reader = ExcelReader("contains_chartsheets.xlsx")
+        reader.read_manifest()
+        reader.read_workbook()
+
+        rel = Relationship(Target="xl/chartsheets/sheet1.xml", type="chartsheet")
+
+        class Sheet:
+            pass
+
+        sheet = Sheet()
+        sheet.name = "chart"
+
+        reader.read_chartsheet(sheet, rel)
+        assert reader.wb['chart'].title == "chart"
